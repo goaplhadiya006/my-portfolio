@@ -47,6 +47,7 @@ export function ContactSection({ nameInputRef }: ContactSectionProps) {
   }>({ status: 'idle', text: '' });
 
   const [copiedEmail, setCopiedEmail] = useState(false);
+  const emailDraftHref = `mailto:${personal.email}?subject=${encodeURIComponent(subject.trim() || 'Portfolio inquiry for Gopal Hadiya')}&body=${encodeURIComponent(`Name: ${name.trim()}\nEmail: ${email.trim()}\n\n${message.trim()}`)}`;
 
   useEffect(() => {
     formLoadedAtRef.current = Date.now();
@@ -120,7 +121,7 @@ export function ContactSection({ nameInputRef }: ContactSectionProps) {
     } catch {
       setSubmitState({
         status: 'error',
-        text: 'Network error reaching the contact server. Please reach out via email directly.',
+        text: 'The contact server could not be reached. Your message is still here; use the email option below to send it.',
       });
     } finally {
       setIsSubmitting(false);
@@ -387,7 +388,7 @@ export function ContactSection({ nameInputRef }: ContactSectionProps) {
                 <div
                   role="status"
                   aria-live="polite"
-                  className={`flex items-start gap-2.5 rounded-xl border p-4 text-sm ${
+                  className={`flex flex-wrap items-start gap-2.5 rounded-xl border p-4 text-sm ${
                     submitState.status === 'success'
                       ? 'border-emerald-500/35 bg-emerald-950/30 text-emerald-200'
                       : 'border-rose-500/35 bg-rose-950/30 text-rose-200'
@@ -398,7 +399,16 @@ export function ContactSection({ nameInputRef }: ContactSectionProps) {
                   ) : (
                     <AlertCircle className="h-5 w-5 shrink-0 text-rose-400" aria-hidden="true" />
                   )}
-                  <span>{submitState.text}</span>
+                  <span className="min-w-0 flex-1">{submitState.text}</span>
+                  {submitState.status === 'error' && (
+                    <a
+                      href={emailDraftHref}
+                      className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-rose-300/40 bg-white/10 px-3 py-2 text-xs font-semibold text-current underline-offset-2 hover:underline"
+                    >
+                      <Mail className="h-3.5 w-3.5" aria-hidden="true" />
+                      Send via email instead
+                    </a>
+                  )}
                 </div>
               )}
 
