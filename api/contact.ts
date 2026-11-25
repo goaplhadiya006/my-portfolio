@@ -1,3 +1,5 @@
+import { portfolioConfig } from '../src/data/portfolioData.ts';
+
 type ApiRequest = {
   method?: string;
   url?: string;
@@ -21,7 +23,7 @@ type ContactInput = {
   submissionId: string;
 };
 
-type ResendResult = { id?: string; last_event?: string; message?: string };
+type ResendResult = { id?: string; last_event?: string; message?: string; name?: string };
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const CONTACT_RATE_LIMIT = 5;
@@ -105,8 +107,11 @@ function readContactInput(body: unknown): { value?: ContactInput; error?: string
 function getEmailConfig() {
   return {
     apiKey: process.env.RESEND_API_KEY?.trim(),
-    from: process.env.CONTACT_FROM_EMAIL?.trim(),
-    to: process.env.CONTACT_TO_EMAIL?.trim(),
+    from: process.env.CONTACT_FROM_EMAIL?.trim()
+      || (process.env.VERCEL ? undefined : 'Gopal Hadiya Portfolio <onboarding@resend.dev>'),
+    to: process.env.CONTACT_TO_EMAIL?.trim()
+      || process.env.CONTACT_EMAIL?.trim()
+      || portfolioConfig.personal.email,
   };
 }
 
@@ -130,8 +135,12 @@ export async function handleContactRequest(req: ApiRequest, res: ApiResponse): P
   }
 
   const { apiKey, from, to } = getEmailConfig();
-  if (!apiKey || !from || !to) {
-    res.status(503).json({ ok: false, error: 'Contact email is not configured on the server yet.' });
+  if (!apiKey) {
+    res.status(503).json({ ok: false, error: 'RESEND_API_KEY is missing on the server. Add it to local .env or Vercel Environment Variables.' });
+    return;
+  }
+  if (!from) {
+    res.status(503).json({ ok: false, error: 'CONTACT_FROM_EMAIL is missing. Set it to an address on a domain verified in Resend.' });
     return;
   }
 
@@ -164,7 +173,12 @@ export async function handleContactRequest(req: ApiRequest, res: ApiResponse): P
     const result = await providerResponse.json() as ResendResult;
     if (!providerResponse.ok || !result.id) {
       console.error('Contact email provider rejected a message:', providerResponse.status);
-      res.status(502).json({ ok: false, error: 'The email provider could not accept your message. Please try again.' });
+      const error = providerResponse.status === 401
+        ? 'Resend rejected the API key. Check RESEND_API_KEY in the server environment.'
+        : providerResponse.status === 403
+          ? 'Resend blocked this sender or recipient. Verify CONTACT_FROM_EMAIL, or use the Resend account email with its test sender.'
+          : 'The email provider could not accept your message. Please try again.';
+      res.status(502).json({ ok: false, error });
       return;
     }
 
@@ -194,7 +208,7 @@ export async function handleContactStatusRequest(req: ApiRequest, res: ApiRespon
   }
   const { apiKey } = getEmailConfig();
   if (!apiKey) {
-    res.status(503).json({ ok: false, error: 'Contact email is not configured on the server yet.' });
+    res.status(503).json({ ok: false, error: 'RESEND_API_KEY is missing on the server. Add it to local .env or Vercel Environment Variables.' });
     return;
   }
 
@@ -205,7 +219,10 @@ export async function handleContactStatusRequest(req: ApiRequest, res: ApiRespon
     });
     if (!providerResponse.ok) {
       console.error('Contact email delivery status could not be retrieved:', providerResponse.status);
-      res.status(502).json({ ok: false, error: 'Delivery status could not be checked right now.' });
+      const error = providerResponse.status === 401 || providerResponse.status === 403
+        ? 'Resend could not read delivery status. Use a Full Access API key in the server environment.'
+        : 'Delivery status could not be checked right now.';
+      res.status(502).json({ ok: false, error });
       return;
     }
     const result = await providerResponse.json() as ResendResult;

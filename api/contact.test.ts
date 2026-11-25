@@ -7,6 +7,8 @@ const originalEnv = {
   key: process.env.RESEND_API_KEY,
   from: process.env.CONTACT_FROM_EMAIL,
   to: process.env.CONTACT_TO_EMAIL,
+  legacyTo: process.env.CONTACT_EMAIL,
+  vercel: process.env.VERCEL,
 };
 
 const validBody = {
@@ -43,6 +45,7 @@ beforeEach(() => {
   process.env.RESEND_API_KEY = 're_test_key';
   process.env.CONTACT_FROM_EMAIL = 'Portfolio <contact@example.com>';
   process.env.CONTACT_TO_EMAIL = 'owner@example.com';
+  delete process.env.VERCEL;
   globalThis.fetch = originalFetch;
 });
 
@@ -54,6 +57,10 @@ after(() => {
   else process.env.CONTACT_FROM_EMAIL = originalEnv.from;
   if (originalEnv.to === undefined) delete process.env.CONTACT_TO_EMAIL;
   else process.env.CONTACT_TO_EMAIL = originalEnv.to;
+  if (originalEnv.legacyTo === undefined) delete process.env.CONTACT_EMAIL;
+  else process.env.CONTACT_EMAIL = originalEnv.legacyTo;
+  if (originalEnv.vercel === undefined) delete process.env.VERCEL;
+  else process.env.VERCEL = originalEnv.vercel;
 });
 
 test('rejects invalid fields before calling the email provider', async () => {
@@ -80,6 +87,44 @@ test('returns a configuration error when Resend credentials are missing', async 
   await handleContactRequest(fakeRequest('POST', validBody), result.response);
   assert.equal(result.status, 503);
   assert.equal(result.body.ok, false);
+});
+
+test('requires a verified sender address in Vercel deployments', async () => {
+  process.env.VERCEL = '1';
+  delete process.env.CONTACT_FROM_EMAIL;
+  const result = captureResponse();
+  await handleContactRequest(fakeRequest('POST', validBody), result.response);
+  assert.equal(result.status, 503);
+  assert.match(String(result.body.error), /verified in Resend/i);
+});
+
+test('uses the portfolio mailbox and Resend test sender when optional addresses are omitted', async () => {
+  delete process.env.CONTACT_FROM_EMAIL;
+  delete process.env.CONTACT_TO_EMAIL;
+  let requestBody: Record<string, unknown> | undefined;
+  globalThis.fetch = async (_input, init) => {
+    requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    return new Response(JSON.stringify({ id: '4ef9a417-02e9-4d39-ad75-9611e0fcc33c' }), { status: 200 });
+  };
+  const result = captureResponse();
+  await handleContactRequest(fakeRequest('POST', { ...validBody, submissionId: 'test-default-mailbox-01' }), result.response);
+  assert.equal(result.status, 202);
+  assert.equal(requestBody?.from, 'Gopal Hadiya Portfolio <onboarding@resend.dev>');
+  assert.deepEqual(requestBody?.to, ['goaplahir006@gmail.com']);
+});
+
+test('accepts the existing CONTACT_EMAIL setting as the recipient mailbox', async () => {
+  delete process.env.CONTACT_TO_EMAIL;
+  process.env.CONTACT_EMAIL = 'legacy-recipient@example.com';
+  let requestBody: Record<string, unknown> | undefined;
+  globalThis.fetch = async (_input, init) => {
+    requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    return new Response(JSON.stringify({ id: '4ef9a417-02e9-4d39-ad75-9611e0fcc33c' }), { status: 200 });
+  };
+  const result = captureResponse();
+  await handleContactRequest(fakeRequest('POST', { ...validBody, submissionId: 'test-legacy-contact-email' }), result.response);
+  assert.equal(result.status, 202);
+  assert.deepEqual(requestBody?.to, ['legacy-recipient@example.com']);
 });
 
 test('submits through Resend and reports success only after delivery is confirmed', async () => {
