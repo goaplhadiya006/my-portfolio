@@ -38,16 +38,18 @@ export function ContactSection({ nameInputRef }: ContactSectionProps) {
   const [message, setMessage] = useState('');
   const [companyWebsite, setCompanyWebsite] = useState(''); // Honeypot
   const formLoadedAtRef = useRef<number>(Date.now());
+  const submissionLockRef = useRef(false);
+  const submissionIdRef = useRef<string | null>(null);
+  const emailIdRef = useRef<string | null>(null);
 
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitState, setSubmitState] = useState<{
-    status: 'idle' | 'success' | 'error';
+    status: 'idle' | 'pending' | 'success' | 'error';
     text: string;
   }>({ status: 'idle', text: '' });
 
   const [copiedEmail, setCopiedEmail] = useState(false);
-  const emailDraftHref = `mailto:${personal.email}?subject=${encodeURIComponent(subject.trim() || 'Portfolio inquiry for Gopal Hadiya')}&body=${encodeURIComponent(`Name: ${name.trim()}\nEmail: ${email.trim()}\n\n${message.trim()}`)}`;
 
   useEffect(() => {
     formLoadedAtRef.current = Date.now();
@@ -72,7 +74,8 @@ export function ContactSection({ nameInputRef }: ContactSectionProps) {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setSubmitState({ status: 'idle', text: '' });
+    if (submissionLockRef.current) return;
+    if (!emailIdRef.current) setSubmitState({ status: 'idle', text: '' });
 
     const validationErrors = validate();
     if (Object.keys(validationErrors).length > 0) {
@@ -81,49 +84,75 @@ export function ContactSection({ nameInputRef }: ContactSectionProps) {
     }
 
     setErrors({});
+    submissionLockRef.current = true;
     setIsSubmitting(true);
 
     try {
-      const response = await fetch('/api/contact', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: name.trim(),
-          email: email.trim(),
-          subject: subject.trim(),
-          message: message.trim(),
-          companyWebsite,
-          formElapsedMs: Date.now() - formLoadedAtRef.current,
-        }),
-      });
-
-      const data = (await response.json()) as { ok?: boolean; message?: string; error?: string };
-
-      if (!response.ok || !data.ok) {
-        setSubmitState({
-          status: 'error',
-          text:
-            data.error ||
-            'Could not send your message right now. Please email goaplahir006@gmail.com directly.',
+      let emailId = emailIdRef.current;
+      if (!emailId) {
+        submissionIdRef.current ??= globalThis.crypto?.randomUUID?.()
+          ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const response = await fetch('/api/contact', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: name.trim(),
+            email: email.trim(),
+            subject: subject.trim(),
+            message: message.trim(),
+            companyWebsite,
+            submissionId: submissionIdRef.current,
+            formElapsedMs: Date.now() - formLoadedAtRef.current,
+          }),
+          signal: AbortSignal.timeout(12_000),
         });
-        return;
+
+        const data = (await response.json()) as { ok?: boolean; emailId?: string; error?: string };
+        if (!response.ok || !data.ok || !data.emailId) {
+          setSubmitState({ status: 'error', text: data.error || 'Could not submit your message. Please try again.' });
+          return;
+        }
+        emailId = data.emailId;
+        emailIdRef.current = emailId;
       }
 
-      setSubmitState({
-        status: 'success',
-        text: data.message || 'Your message was received by the server.',
-      });
-      setName('');
-      setEmail('');
-      setSubject('');
-      setMessage('');
-      formLoadedAtRef.current = Date.now();
+      setSubmitState({ status: 'pending', text: 'Message accepted. Waiting for the email provider to confirm delivery…' });
+      for (let attempt = 0; attempt < 25; attempt += 1) {
+        if (attempt > 0) await new Promise((resolve) => window.setTimeout(resolve, 2000));
+        const statusResponse = await fetch(`/api/contact?id=${encodeURIComponent(emailId)}`, { cache: 'no-store', signal: AbortSignal.timeout(9_000) });
+        const delivery = (await statusResponse.json()) as { ok?: boolean; status?: 'pending' | 'delivered' | 'failed'; error?: string };
+        if (!statusResponse.ok || !delivery.ok) {
+          setSubmitState({ status: 'pending', text: 'Delivery confirmation is temporarily unavailable. Keep your message here and check again before resending.' });
+          return;
+        }
+        if (delivery.status === 'delivered') {
+          setSubmitState({ status: 'success', text: 'Your message was delivered successfully.' });
+          setName('');
+          setEmail('');
+          setSubject('');
+          setMessage('');
+          submissionIdRef.current = null;
+          emailIdRef.current = null;
+          formLoadedAtRef.current = Date.now();
+          return;
+        }
+        if (delivery.status === 'failed') {
+          setSubmitState({ status: 'error', text: 'The email provider could not deliver this message. Check the address and try again.' });
+          submissionIdRef.current = null;
+          emailIdRef.current = null;
+          return;
+        }
+      }
+      setSubmitState({ status: 'pending', text: 'Delivery is still pending. Use “Check Delivery Status” before sending again.' });
     } catch {
       setSubmitState({
         status: 'error',
-        text: 'The contact server could not be reached. Your message is still here; use the email option below to send it.',
+        text: emailIdRef.current
+          ? 'Your message was accepted, but delivery could not be checked. Use “Check Delivery Status” before resending.'
+          : 'The contact server could not be reached. Your message is still here; please try again later.',
       });
     } finally {
+      submissionLockRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -288,8 +317,12 @@ export function ContactSection({ nameInputRef }: ContactSectionProps) {
                     name="name"
                     type="text"
                     required
+                    maxLength={100}
+                    disabled={Boolean(emailIdRef.current)}
                     value={name}
                     onChange={(e) => {
+                      submissionIdRef.current = null;
+                      emailIdRef.current = null;
                       setName(e.target.value);
                       if (errors.name) setErrors((prev) => ({ ...prev, name: undefined }));
                     }}
@@ -314,8 +347,12 @@ export function ContactSection({ nameInputRef }: ContactSectionProps) {
                     name="email"
                     type="email"
                     required
+                    maxLength={160}
+                    disabled={Boolean(emailIdRef.current)}
                     value={email}
                     onChange={(e) => {
+                      submissionIdRef.current = null;
+                      emailIdRef.current = null;
                       setEmail(e.target.value);
                       if (errors.email) setErrors((prev) => ({ ...prev, email: undefined }));
                     }}
@@ -341,8 +378,12 @@ export function ContactSection({ nameInputRef }: ContactSectionProps) {
                   name="subject"
                   type="text"
                   required
+                  maxLength={160}
+                  disabled={Boolean(emailIdRef.current)}
                   value={subject}
                   onChange={(e) => {
+                    submissionIdRef.current = null;
+                    emailIdRef.current = null;
                     setSubject(e.target.value);
                     if (errors.subject) setErrors((prev) => ({ ...prev, subject: undefined }));
                   }}
@@ -367,8 +408,12 @@ export function ContactSection({ nameInputRef }: ContactSectionProps) {
                   name="message"
                   rows={5}
                   required
+                  maxLength={3000}
+                  disabled={Boolean(emailIdRef.current)}
                   value={message}
                   onChange={(e) => {
+                    submissionIdRef.current = null;
+                    emailIdRef.current = null;
                     setMessage(e.target.value);
                     if (errors.message) setErrors((prev) => ({ ...prev, message: undefined }));
                   }}
@@ -391,41 +436,36 @@ export function ContactSection({ nameInputRef }: ContactSectionProps) {
                   className={`flex flex-wrap items-start gap-2.5 rounded-xl border p-4 text-sm ${
                     submitState.status === 'success'
                       ? 'border-emerald-500/35 bg-emerald-950/30 text-emerald-200'
-                      : 'border-rose-500/35 bg-rose-950/30 text-rose-200'
+                      : submitState.status === 'pending'
+                        ? 'border-violet-500/35 bg-violet-950/20 text-violet-200'
+                        : 'border-rose-500/35 bg-rose-950/30 text-rose-200'
                   }`}
                 >
                   {submitState.status === 'success' ? (
                     <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-400" aria-hidden="true" />
+                  ) : submitState.status === 'pending' ? (
+                    <Loader2 className="h-5 w-5 shrink-0 animate-spin text-violet-300" aria-hidden="true" />
                   ) : (
                     <AlertCircle className="h-5 w-5 shrink-0 text-rose-400" aria-hidden="true" />
                   )}
                   <span className="min-w-0 flex-1">{submitState.text}</span>
-                  {submitState.status === 'error' && (
-                    <a
-                      href={emailDraftHref}
-                      className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-rose-300/40 bg-white/10 px-3 py-2 text-xs font-semibold text-current underline-offset-2 hover:underline"
-                    >
-                      <Mail className="h-3.5 w-3.5" aria-hidden="true" />
-                      Send via email instead
-                    </a>
-                  )}
                 </div>
               )}
 
               <button
                 type="submit"
-                disabled={isSubmitting}
+                    disabled={isSubmitting}
                 className="inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-lg bg-violet-600 px-6 py-3 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-60 disabled:cursor-not-allowed active:scale-[0.98] transition-all duration-150 min-h-[44px] cursor-pointer"
               >
                 {isSubmitting ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                    <span>Sending Message...</span>
+                    <span>{emailIdRef.current ? 'Checking Delivery...' : 'Sending Message...'}</span>
                   </>
                 ) : (
                   <>
                     <Send className="h-4 w-4" aria-hidden="true" />
-                    <span>Send Message</span>
+                    <span>{emailIdRef.current ? 'Check Delivery Status' : 'Send Message'}</span>
                   </>
                 )}
               </button>
