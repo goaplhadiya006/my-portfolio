@@ -94,7 +94,7 @@ export const portfolioConfig: PortfolioConfig = {
     ],
     location: 'Surat, Gujarat, India',
     availabilityNote: 'Open to entry-level roles and internships',
-    profileImageUrl: '/profile-photo.jpeg',
+    profileImageUrl: '/profilephoto.jpeg',
     email: 'goaplahir006@gmail.com',
     phone: '+91 99259 10316',
     phoneHref: 'tel:+919925910316',
