@@ -1,0 +1,166 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    scroll-behavior: smooth;
+    background-color: #070913;
+    color: #f1f5f9;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
+
+  h1, h2, h3, h4 {
+    font-family: var(--font-display);
+    text-wrap: balance;
+  }
+
+  :focus-visible {
+    outline: 2px solid #8b5cf6;
+    outline-offset: 2px;
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Subtle architectural grid background */
+.bg-architectural-grid {
+  background-image:
+    linear-gradient(to right, rgba(148, 163, 184, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(148, 163, 184, 0.04) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+.hero-photo-backdrop {
+  background-image: url('/hero-backdrop.jpg');
+  background-size: cover;
+  background-position: center 42%;
+  opacity: 0.18;
+  mask-image: linear-gradient(90deg, transparent 4%, black 72%);
+}
+
+:root[data-theme='light'] .hero-photo-backdrop {
+  opacity: 0.14;
+}
+
+/* Light mode overrides the portfolio's dark-first utility palette globally. */
+:root[data-theme='light'] {
+  color-scheme: light;
+  background-color: #f8fafc;
+  color: #0f172a;
+}
+
+:root[data-theme='light'] body {
+  background-color: #f8fafc;
+  color: #0f172a;
+}
+
+:root[data-theme='light'] [class~='bg-[#070913]'],
+:root[data-theme='light'] [class*='bg-[#070913]/'] {
+  background-color: #f8fafc;
+}
+
+:root[data-theme='light'] [class~='bg-[#05070F]'] {
+  background-color: #e2e8f0;
+}
+
+:root[data-theme='light'] [class~='bg-[#0B0F1E]'],
+:root[data-theme='light'] [class*='bg-[#0B0F1E]/'] {
+  background-color: #f1f5f9;
+}
+
+:root[data-theme='light'] [class~='bg-[#0E1326]'],
+:root[data-theme='light'] [class*='bg-[#182042]'],
+:root[data-theme='light'] [class*='bg-[#181D3D]'] {
+  background-color: #eef2ff;
+}
+
+:root[data-theme='light'] [class~='bg-[#11162A]'],
+:root[data-theme='light'] [class*='bg-[#11162A]/'] {
+  background-color: #ffffff;
+}
+
+:root[data-theme='light'] [class~='bg-[#171E38]'] {
+  background-color: #e2e8f0;
+}
+
+:root[data-theme='light'] [class*='from-[#'] {
+  background-color: #f1f5f9;
+  background-image: linear-gradient(135deg, #f8fafc, #e2e8f0);
+}
+
+:root[data-theme='light'] [class~='text-white'],
+:root[data-theme='light'] [class~='text-slate-100'],
+:root[data-theme='light'] [class~='text-slate-200'] {
+  color: #0f172a;
+}
+
+:root[data-theme='light'] [class~='text-slate-300'] {
+  color: #334155;
+}
+
+:root[data-theme='light'] [class~='text-slate-400'] {
+  color: #475569;
+}
+
+:root[data-theme='light'] [class~='text-slate-500'] {
+  color: #64748b;
+}
+
+:root[data-theme='light'] [class~='text-violet-200'],
+:root[data-theme='light'] [class~='text-violet-300'] {
+  color: #6d28d9;
+}
+
+:root[data-theme='light'] [class~='text-violet-100'] {
+  color: #5b21b6;
+}
+
+:root[data-theme='light'] [class~='text-violet-400'] {
+  color: #7c3aed;
+}
+
+:root[data-theme='light'] [class~='text-indigo-300'] {
+  color: #4338ca;
+}
+
+:root[data-theme='light'] [class~='text-emerald-300'] {
+  color: #047857;
+}
+
+:root[data-theme='light'] [class~='border-white/10'],
+:root[data-theme='light'] [class~='border-white/15'] {
+  border-color: #cbd5e1;
+}
+
+:root[data-theme='light'] [class~='bg-white/5'],
+:root[data-theme='light'] [class~='bg-white/10'] {
+  background-color: rgb(15 23 42 / 6%);
+}
+
+:root[data-theme='light'] [class~='hover:text-white']:hover {
+  color: #6d28d9;
+}
+
+:root[data-theme='light'] input,
+:root[data-theme='light'] textarea {
+  color-scheme: light;
+}
+
+:root[data-theme='light'] header,
+:root[data-theme='light'] footer,
+:root[data-theme='light'] section {
+  transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease;
+}
